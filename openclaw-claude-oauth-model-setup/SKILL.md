@@ -137,6 +137,22 @@ cat ~/.claude/.credentials.json | python3 -c "import json,sys; d=json.load(sys.s
 
 Token format: `sk-ant-oat01-...` (long string). Do **not** use `sk-ant-api01-` (API keys) — they are a different format.
 
+## API rate limit → fallback to 2nd model
+
+When the primary model hits API rate limits (429), OpenClaw should automatically try the next model in `fallbacks`. That behavior depends on version and config.
+
+**Upgrade for runtime fallback (required):** Runtime failover on rate limit was fixed in **OpenClaw 2026.2.26** (PR [#23816](https://github.com/openclaw/openclaw/pull/23816)). On older versions, fallback only happened at session creation (after a gateway restart), so agents stayed on the rate-limited primary and never tried fallbacks.
+
+- **Action:** Use gateway version **2026.2.26 or newer** (e.g. latest Docker image) so that when the primary returns 429, the gateway tries the next model in `agents.defaults.model.fallbacks` without a restart.
+
+**Allowlist can hide fallbacks:** If you set `agents.defaults.models` (e.g. for per-model params), any fallback model **not** in that list was previously dropped and never tried (fixed in PR [#22230](https://github.com/openclaw/openclaw/pull/22230)). On older builds, either omit `agents.defaults.models` or include every fallback in the list so they are attempted.
+
+**Workaround on older OpenClaw:** If you cannot upgrade yet, when you hit rate limit:
+
+1. Edit `~/.openclaw/openclaw.json` and set `agents.defaults.model.primary` to the next model in your chain (e.g. first fallback).
+2. Restart the gateway so sessions are recreated and use the new primary.
+3. After the rate limit window passes, set `primary` back and restart again if you want to return to the original model.
+
 ## Common Mistakes
 
 | Mistake | Fix |
@@ -146,3 +162,4 @@ Token format: `sk-ant-oat01-...` (long string). Do **not** use `sk-ant-api01-` (
 | `configure` wizard not interactive | Must use `-it` flag: `docker exec -it openclaw-gateway ...` |
 | Primary model not switching | Restart gateway after editing config; verify with `doctor` |
 | Fallback `orfree/` models not working | These require an OpenRouter free-tier API key configured separately |
+| Rate limit hit but no fallback to 2nd model | Upgrade to 2026.2.26+; ensure fallbacks are not filtered by `agents.defaults.models` |
